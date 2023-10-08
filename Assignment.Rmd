@@ -1,0 +1,568 @@
+---
+title: "Assignment_Aggregate"
+output: html_document
+date: "2023-10-07"
+---
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(DescTools)
+library(cluster)
+library(GGally)
+library(DBI)
+library(RMySQL)
+library(XML)
+library(RCurl)
+library(rvest)
+library(magrittr)
+library(lattice)
+library(reshape2)
+```
+
+```{r}
+#Importing Dataset
+data <- read_csv("D:/Stats/Assignment/customer_shopping_data_1695379411426.csv")
+head(data)
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+print(typeof(data$invoice_no))
+print(typeof(data$customer_id))
+print(typeof(data$gender))
+print(typeof(data$age))
+print(typeof(data$category))
+print(typeof(data$quantity))
+print(typeof(data$price))
+print(typeof(data$payment_method))
+print(typeof(data$invoice_date))
+print(typeof(data$shopping_mall))
+```
+
+```{r}
+data$invoice_date <- as.Date(data$invoice_date, "%d/%m/%Y")
+```
+
+```{r}
+print(typeof(data$invoice_date))
+data$invoice_date <- as.Date(data$invoice_date, origin = "2021-01-01")
+data$year = strftime(data$invoice_date, "%Y")
+data$month = strftime(data$invoice_date, "%m")
+data$day = strftime(data$invoice_date, "%d")
+```
+
+
+```{r}
+data_aggr <- aggregate(price ~ month + year, data, FUN = sum)
+```
+
+```{r}
+plot(data_aggr)
+```
+
+```{r}
+xdata <- as.matrix(data_aggr$month)
+ydata <- as.matrix(data_aggr$price)
+
+xdata.ts<-ts(xdata,start = c(min(data_aggr$month),max(data_aggr$month)),frequency =1)
+plot(xdata.ts,main = "Time series plot of Input Signals", xlab = "Time", ylab = "Other Elements")
+
+
+# Same as above for output signals Y.
+
+ydata.ts<-ts(ydata,start = c(min(data_aggr$month),max(data_aggr$month)),frequency =1)
+plot(ydata.ts,main = "Time series plot of Price", xlab = "Time", ylab = "Price")
+```
+
+```{r}
+ggplot(data, aes(x = data$age, y = data$price)) +
+  geom_point(position=position_jitter(0.3))
+```
+
+```{r}
+ggplot(data, aes(x = data$gender, y = data$price)) +
+  geom_point(position=position_jitter(0.2))
+```
+
+```{r}
+ggplot(data, aes(x = data$shopping_mall, y = data$price)) +
+  geom_point(position=position_jitter(0.5))
+```
+
+```{r}
+data <- data %>% mutate(total_sale = price*quantity)
+```
+
+```{r}
+data %>% mutate(date = invoice_date %>% str_sub(1,7) %>% ym()) %>% 
+  group_by(date, shopping_mall) %>% 
+  summarise(sales_USD = sum(total_sale*0.052/1000), .groups = "drop") %>%
+  filter(date <= '2023-02-01') %>% 
+  ggplot(aes(date, sales_USD, col = shopping_mall)) +
+  geom_line(linewidth = .5, alpha = .7) +
+  theme_bw() +
+  facet_wrap(~ shopping_mall) +
+  labs(title = 'Time series plot of sales based on Shopping Mall',
+       subtitle = '1 = 1,000$') +
+  xlab('') + ylab('Total Sales in USD') +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        strip.background = element_rect(fill = '#fd8d3c'),
+        strip.text = element_text(face = 'bold',colour = 'white', size = 7),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 7, angle = 25),
+        legend.position = 'none') +
+  scale_x_date(date_breaks = '6 month', date_labels = '%Y-%m')
+```
+
+```{r}
+data %>% mutate(date = invoice_date %>% str_sub(1,7) %>% ym()) %>% 
+  group_by(date, category) %>% 
+  summarise(sales_USD = sum(total_sale*0.052/1000), .groups = "drop") %>%
+  filter(date <= '2023-02-01') %>% 
+  ggplot(aes(date, sales_USD, col = category)) +
+  geom_line(linewidth = .5, alpha = .7) +
+  theme_bw() +
+  facet_wrap(~ category) +
+  labs(title = 'Time series plot of sales based on Category',
+       subtitle = '1 = 1,000$') +
+  xlab('') + ylab('Total Sales in USD') +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        strip.background = element_rect(fill = '#fd8d3c'),
+        strip.text = element_text(face = 'bold',colour = 'white', size = 7),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 7, angle = 25),
+        legend.position = 'none') +
+  scale_x_date(date_breaks = '6 month', date_labels = '%Y-%m')
+```
+
+```{r}
+frequency_table1 <- data %>%
+  count(gender) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+ggplot(frequency_table1, aes(x = "", y = percentage, fill = gender)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), position = position_stack(vjust = 0.5), color = "black") +
+  ggtitle("Pie Chart for Gender") + labs(fill= "Gender") +
+  theme_void()
+```
+
+```{r}
+frequency_table2 <- data %>%
+  count(category) %>%
+  mutate(percentage = n / sum(n) * 100) 
+
+ggplot(frequency_table2, aes(x = "", y = percentage, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), position = position_stack(vjust = 0.5), color = "black") +
+  ggtitle("Pie Chart for Category") + labs(fill= "Category") +
+  theme_void()
+```
+
+```{r}
+data %>% ggplot(data = data, mapping = aes(x = shopping_mall)) +
+  geom_histogram(binwidth = 5, fill = 'limegreen', col = 'black', stat = "count") + facet_wrap(~ category) + 
+  xlab("Shopping Mall") +
+  ylab("Frequency") +
+  ggtitle("Histogram for Shopping Mall by Category") +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 5.5, angle = 35))
+```
+
+```{r}
+data %>% ggplot(data = data, mapping = aes(x = payment_method)) +
+  geom_histogram(binwidth = 5, fill = 'blue', col = 'black', stat = "count") + facet_wrap(~ category) + 
+  xlab("Payment Method") +
+  ylab("Frequency") +
+  ggtitle("Histogram for Payment Method by Category") +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 5.5, angle = 35))
+```
+
+```{r}
+ggplot(data, aes(x = price)) +
+  geom_histogram(binwidth = 500, fill = "navyblue", color = "black") +
+  ggtitle("Distribution of Price") +
+  xlab("Price") +
+  ylab("Frequency")
+```
+
+```{r}
+missing_values <- is.na(data)
+missvalues <- sum(missing_values)
+
+print(sprintf("Number of missing value in the dataset is %d", missvalues))
+```
+
+```{r}
+print(class(data$gender))
+print(class(data$age))
+print(class(data$category))
+print(class(data$quantity))
+print(class(data$price))
+print(class(data$payment_method))
+print(class(data$invoice_date))
+print(class(data$shopping_mall))
+print(class(data$year))
+print(class(data$month))
+print(class(data$day))
+print(class(data$total_sale))
+```
+
+
+```{r}
+data$gender <- factor(data$gender, level = c("Female", "Male"), labels = c(1,2))
+data$category <- factor(data$category, level = c("Clothing", "Shoes", "Books", "Cosmetics", "Food & Beverage", "Toys", "Technology", "Souvenir"), labels = c(1,2,3,4,5,6,7,8))
+data$payment_method <- factor(data$payment_method, level = c("Credit Card", "Debit Card", "Cash"), labels = c(1,2,3))
+data$shopping_mall <- factor(data$shopping_mall, level = c("Kanyon", "Forum Istanbul", "Metrocity", "Metropol AVM", "Istinye Park", "Mall of Istanbul", "Emaar Square Mall", "Cevahir AVM", "Viaport Outlet", "Zorlu Center"), labels = c(1,2,3,4,5,6,7,8,9,10))
+```
+
+
+```{r}
+data$gender <- as.numeric(data$gender)
+data$category <- as.numeric(data$category)
+data$payment_method <- as.numeric(data$payment_method)
+data$nvoice_date <- as.numeric(data$invoice_date)
+data$shopping_mall <- as.numeric(data$shopping_mall)
+data$year <- as.numeric(data$year)
+data$month <- as.numeric(data$month)
+data$day <- as.numeric(data$day)
+data$total_sale <- as.numeric(data$total_sale)
+```
+
+```{r}
+my_data1$invoice_date <- as.numeric(my_data1$invoice_date)
+print(class(my_data1$invoice_date))
+```
+
+```{r}
+my_data1 <- subset(data, select = -invoice_no)
+my_data1 <- subset(my_data1, select = -customer_id)
+```
+
+
+
+```{r}
+corr_mat <- cor(my_data1)
+
+heatmap(corr_mat,
+        col = colorRampPalette(c("blue", "white", "red"))(20),
+        symm = TRUE,
+        main = "Correlation Heatmap")
+
+# reduce the size of correlation matrix
+melted_corr_mat <- melt(corr_mat)
+head(melted_corr_mat)
+```
+
+```{r}
+ggplot(data = melted_corr_mat, aes(x=Var1, y=Var1, fill=value)) + 
+  geom_tile() +
+  geom_text(aes(Var1, Var2, label = value), size = 2) +
+  scale_fill_gradient2(low = "blue", high = "red",
+                       limit = c(-1,1), name="Correlation") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.background = element_blank())
+```
+
+```{r}
+# creating correlation matrix
+corr_mat <- round(cor(my_data1),2)
+ 
+# reduce the size of correlation matrix
+melted_corr_mat <- melt(corr_mat)
+head(melted_corr_mat)
+ 
+# plotting the correlation heatmap
+library(ggplot2)
+ggplot(data = melted_corr_mat, aes(x=Var1, y=Var2, 
+                                   fill=value)) + 
+geom_tile() +
+geom_text(aes(Var2, Var1, label = value), 
+          color = "black", size = 4)
+```
+
+```{r}
+pairs(~gender + age + category + quantity + price + payment_method + invoice_date + shopping_mall, data = my_data1,
+    main = "Scatterplot Matrix")
+```
+
+```{r}
+my_data <- data.frame(a1 = my_data1$age,
+a2= my_data1$category,
+a3= my_data1$price,
+a4= my_data1$shopping_mall,
+y= my_data1$quantity
+)
+plot(my_data)
+
+cor(my_data)
+```
+
+```{r}
+model1 <- lm(y ~ poly(a4, 1, raw = TRUE) + poly(a1, 2, raw = TRUE) + poly(a1, 3, raw = TRUE) +
+               poly(a2, 4, raw = TRUE) + poly(a1, 5, raw = TRUE), data = my_data)
+
+model2 <- lm(y ~ poly(a4, 1, raw = TRUE) + poly(a1, 2, raw = TRUE) + poly(a3, 3, raw = TRUE), data = my_data)
+
+model3 <- lm(y ~ poly(a3, 1, raw = TRUE) + poly(a3, 2, raw = TRUE), data = my_data)
+
+model4 <- lm(y ~ poly(a2, 1, raw = TRUE) + poly(a1, 2, raw = TRUE) + poly(a3, 4, raw = TRUE), data = my_data)
+
+model5 <- lm(y ~ poly(a4, 1, raw = TRUE) + poly(a1, 2, raw = TRUE) + poly(a1, 3, raw = TRUE) +
+               poly(a3, 4, raw = TRUE), data = my_data)
+```
+
+```{r}
+estimated_parameters_list <- list(
+  Model1 = coef(model1),
+  Model2 = coef(model2),
+  Model3 = coef(model3),
+  Model4 = coef(model4),
+  Model5 = coef(model5)
+)
+```
+
+```{r}
+extract_coefficients <- function(parameters) {
+  coef_list <- list()
+  coef_list$θ1 <- parameters["poly(a4, 4, raw = TRUE)1"]
+  coef_list$θ2 <- parameters["poly(a1, 3, raw = TRUE)1"]
+  coef_list$θ3 <- parameters["poly(a3, 4, raw = TRUE)1"]
+  coef_list$θ4 <- parameters["poly(a2, 2, raw = TRUE)1"]
+  coef_list$θbias <- parameters["(Intercept)"]
+  return(coef_list)
+}
+```
+
+```{r}
+# Create a DataFrame to store coefficients for each model
+coefficients_df <- data.frame(
+  Model = character(0),
+  θ1 = numeric(0),
+  θ2 = numeric(0),
+  θ3 = numeric(0),
+  θ4 = numeric(0),
+  θbias = numeric(0)
+)
+```
+
+```{r}
+# Loop through each model's estimated parameters
+for (model_name in names(estimated_parameters_list)) {
+  parameters <- estimated_parameters_list[[model_name]]
+  coefficients <- extract_coefficients(parameters)
+  
+  # Add coefficients to the DataFrame
+  coefficients_df <- rbind(coefficients_df, cbind(Model = model_name, as.data.frame(t(coefficients))))
+}
+
+# Print the coefficients DataFrame
+print(coefficients_df)
+plot(coefficients_df)
+```
+
+```{r}
+print(estimated_parameters_list$Model1)
+print(estimated_parameters_list$Model2)
+print(estimated_parameters_list$Model3)
+print(estimated_parameters_list$Model4)
+print(estimated_parameters_list$Model5)
+```
+
+```{r}
+# Calculate RSS for each model
+rss_values <- c(
+  sum(model1$residuals^2),
+  sum(model2$residuals^2),
+  sum(model3$residuals^2),
+  sum(model4$residuals^2),
+  sum(model5$residuals^2)
+)
+
+# Create a data frame to store the RSS for each model
+rss_df <- data.frame(
+  Model = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5"),
+  RSS = rss_values
+)
+
+# Print the RSS for each model
+print(rss_df)
+```
+
+```{r}
+# Define a function to calculate the log-likelihood for a given model
+calculate_log_likelihood <- function(model) {
+  n <- length(model$residuals)
+  sigma_sq <- sum(model$residuals^2) / (n - length(model$coefficients))
+  log_likelihood <- -n/2 * log(2 * pi * sigma_sq) - sum(model$residuals^2) / (2 * sigma_sq)
+  return(log_likelihood)
+}
+
+# Calculate log-likelihood for each model
+log_likelihood_values <- c(
+  calculate_log_likelihood(model1),
+  calculate_log_likelihood(model2),
+  calculate_log_likelihood(model3),
+  calculate_log_likelihood(model4),
+  calculate_log_likelihood(model5)
+)
+
+# Create a data frame to store the log-likelihood for each model
+log_likelihood_df <- data.frame(
+  Model = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5"),
+  LogLikelihood = log_likelihood_values
+)
+
+# Print the log-likelihood for each model
+print(log_likelihood_df)
+plot(log_likelihood_df)
+```
+
+```{r}
+# Calculate AIC for each model
+aic_values <- c(
+  AIC(model1),
+  AIC(model2),
+  AIC(model3),
+  AIC(model4),
+  AIC(model5)
+)
+
+# Create a data frame to store the AIC for each model
+aic_df <- data.frame(
+  Model = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5"),
+  AIC = aic_values
+)
+
+# Print the AIC for each model
+print(aic_df)
+
+
+# Calculate BIC for each model
+bic_values <- c(
+  BIC(model1),
+  BIC(model2),
+  BIC(model3),
+  BIC(model4),
+  BIC(model5)
+)
+
+# Create a data frame to store the BIC for each model
+bic_df <- data.frame(
+  Model = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5"),
+  BIC = bic_values
+)
+
+# Print the BIC for each model
+print(bic_df)
+plot(bic_values)
+```
+
+```{r}
+# Make predictions using each model
+predictions1 <- as.numeric(predict(model1))
+predictions2 <- as.numeric(predict(model2))
+predictions3 <- as.numeric(predict(model3))
+predictions4 <- as.numeric(predict(model4))
+predictions5 <- as.numeric(predict(model5))
+
+# Calculate prediction errors
+errors1 <- my_data$y - predictions1
+errors2 <- my_data$y - predictions2
+errors3 <- my_data$y - predictions3
+errors4 <- my_data$y - predictions4
+errors5 <- my_data$y - predictions5
+
+# Create a list of error vectors
+error_list <- list(errors1, errors2, errors3, errors4, errors5)
+
+# Create a function to generate Q-Q plots
+plot_qq <- function(errors, model_name) {
+  qqnorm(errors, main = paste("Q-Q Plot for", model_name))
+  qqline(errors, col = "blue")
+}
+
+# Create a layout for the plots
+layout(matrix(1:5, nrow = 1))
+
+# Generate and display Q-Q plots for each model
+for (i in 1:5) {
+  plot_qq(error_list[[i]], model_name = paste("Model", i))
+}
+```
+
+```{r}
+# Calculate means of errors for each model
+mean_errors <- c(mean(errors1), mean(errors2), mean(errors3), mean(errors4), mean(errors5))
+
+# Create a table
+result_table <- data.frame(
+  Model = paste("Model", 1:5),
+  Mean_Error = mean_errors,
+  AIC = aic_values,
+  BIC = bic_values
+)
+
+# Print the result table
+print(result_table)
+```
+
+```{r}
+# Set the seed for reproducibility
+set.seed(123)
+
+# Split the data into training and testing datasets (70% train, 30% test)
+train_index <- sample(1:nrow(my_data), 0.7 * nrow(my_data))
+train_data <- my_data[train_index, ]
+test_data <- my_data[-train_index, ]
+
+# Fit the "best" model (Model 4) using the training data
+best_model <- lm(y ~ poly(a2, 1, raw = TRUE) + poly(a1, 2, raw = TRUE) + poly(a3, 4, raw = TRUE), data = train_data)
+
+# Predictions on the testing data
+predictions <- predict(best_model, newdata = test_data, interval = "prediction", level = 0.95)
+
+# Create a data frame to store results
+results <- data.frame(
+  a1 = test_data$a1,
+  a2 = test_data$a2,
+  a3 = test_data$a3,
+  y_true = test_data$y,
+  y_pred = predictions[, 1],  # Predicted values
+  lower_bound = predictions[, 2],  # Lower bound of the prediction interval
+  upper_bound = predictions[, 3]   # Upper bound of the prediction interval
+)
+
+plot(results)
+```
+
+```{r}
+# Create a scatterplot of the testing data points with prediction intervals
+ggplot(results, aes(x = a1, y = y_true)) +
+  geom_point() +
+  geom_line(aes(x = a1, y = y_pred), color = "maroon", size = 1) +
+  geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound), width = 0.1, color = "skyblue", size = 1) +
+  ggtitle("Model 4: Testing Data vs. Predictions with 95% Prediction Intervals") +
+  xlab("a1 (Age)") +
+  ylab("Total Sales Quantity")
+```
+
+
+
+
+
+
+
+
