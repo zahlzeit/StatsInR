@@ -560,6 +560,47 @@ ggplot(results, aes(x = a1, y = y_true)) +
 ```
 
 
+```{r}
+## Model 4 will be used, parameter are selected and kept constant.
+arr_1=0
+arr_2=0
+f_value=0
+s_value=0
+thetaHatModel4
+#values from thetahat
+thetebias <- 0.483065688 #selected parameter
+thetaone <-0.143578928 # selected parameter
+thetatwo <- 0.010038614 # constant value
+thetathree <- 0.001912836 # constant value
+
+
+Epison <- RSS_Model_4 * 2 ## fixing value of eplision
+num <- 100 #number of iteration
+##Calculating Y-hat for performing rejection ABC
+counter <- 0
+for (i in 1:num) {
+  range1 <- runif(1,-0.483065688,0.483065688) # calculating the range
+  range1
+  range2 <- runif(1,-0.143578928,0.143578928)
+  New_thetahat <- matrix(c(range1,range2,thetatwo,thetathree))
+  New_Y_Hat <- Y2 %*% New_thetahat ## calculating new Y-hat
+  new_RSS <- sum((y-New_Y_Hat)^2)
+  new_RSS
+  if (new_RSS > Epison){
+    arr_1[i] <- range1
+    arr_2[i] <- range2
+    counter = counter+1
+    f_value <- matrix(arr_1)
+    s_value <- matrix(arr_2)
+  }
+}
+hist(f_value)
+hist(s_value)
+
+###ploting Joint and Marginal Posterior Distribution of the graph
+plot(f_value,s_value, col = c("brown", "blue"), main = "Joint and Marginal Posterior Distribution")
+par(mfrow=c(1,1))
+```
 
 
 
